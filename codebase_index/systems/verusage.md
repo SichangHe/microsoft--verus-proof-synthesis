@@ -4,6 +4,7 @@
 - If you need the agent-stack implementation split, read [`verusage-agents.md`](verusage-agents.md).
 - If you need the standard-library retrieval implementation split, read [`verusage-vstd-library.md`](verusage-vstd-library.md).
 - `agents/prompts/` holds prompt templates. `run_batch.py` is the practical batch runner over `.rs` files.
+- `veval.py` still handles verification/error parsing; Lynette-backed helpers are mostly for safety checks and better structural locations.
 - `agent_framework.py` is a compatibility re-export; real logic lives in `verusage/agents/`.
 
 warning
