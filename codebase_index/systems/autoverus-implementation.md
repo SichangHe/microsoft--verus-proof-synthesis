@@ -1,0 +1,14 @@
+- `main.py` -> CLI and mode selection.
+- `generation.py` -> main AutoVerus control plane; candidate generation plus some ranking/refinement orchestration before final writeout.
+- `refinement.py` -> repair stage after generation; error-specific fixing logic.
+- `veval.py` -> Verus invocation, failure typing, scoring.
+- `infer.py` -> LLM wrapper and prompt transport.
+- `utils.py` -> code cleanup, safety checks, helper rewrites, function extraction.
+- `houdini.py` -> invariant/predicate helper logic.
+- `lynette.py` -> parser bridge.
+- `verify.py` -> benchmark runner over benchmark directories.
+
+- If the task is “why did this proof candidate get accepted/rejected?”, start in `generation.py` + `veval.py`.
+- If the task is “why does repair handle this verifier failure badly?”, start in `refinement.py` + `veval.py`. Also remember `main.py` can run `Refinement` directly, while `Generation` may invoke repair internally.
+- If the task is prompt/example selection, inspect `examples/input-*` + matching `examples/output-*` only after reading `generation.py`.
+- If the task is cross-function proof generation, only then read `inter_main.py`, `inter_generation.py`, and `utils_inter.py`.
