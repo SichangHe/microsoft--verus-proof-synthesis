@@ -1,0 +1,3 @@
+- Small, mostly single-file proof generation -> [`autoverus.md`](autoverus.md).
+- Agent-based repair for larger system code -> [`verusage.md`](verusage.md).
+- Shared verifier / LLM / rewrite / parser helpers used by both systems -> [`shared-runtime.md`](shared-runtime.md).

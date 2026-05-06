@@ -1,0 +1,3 @@
+- Benchmark structure / task files / suite choice -> [`benchmarks.md`](benchmarks.md).
+- Saved experiment outputs / artifact context -> [`generated-results.md`](generated-results.md).
+- Public results site / submission schema -> [`leaderboard.md`](leaderboard.md).

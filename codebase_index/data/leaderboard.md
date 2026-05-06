@@ -1,0 +1,3 @@
+- UI/content changes -> `leaderboard/index.html`, `about.html`, `submit.html`, `css/`, `js/leaderboard.js`.
+- Result-data changes -> `leaderboard/data/`, especially `schema.json`, `verus-bench-results.json`, `verusage-bench-results.json`.
+- If you are comparing published numbers, also read [`benchmarks.md`](benchmarks.md).
