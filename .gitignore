@@ -1,1 +1,14 @@
 __pycache__
+
+# VeruSAGE hands-off pilot outputs and tool builds — large + machine-specific
+/runs/
+/.local-tools/
+
+# Stray Verus .rlib left in repo root
+/libva_range__impl2_new.rlib
+
+# Long-running plan scratch files (per AGENTS.md autonomous mode)
+/PLAN-*.md
+
+# Earlier plan scratchpad written by a previous agent
+/VERUSAGE_HANDS_OFF_REPRODUCTION_PLAN.md
