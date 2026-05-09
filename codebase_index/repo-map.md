@@ -4,6 +4,7 @@
 - `generated/` -> saved experiment outputs. read [`data/generated-results.md`](data/generated-results.md).
 - `leaderboard/` -> static site + result JSON/schema. read [`data/leaderboard.md`](data/leaderboard.md).
 - `utils/lynette/` -> large Rust parser/tool workspace. read [`tooling/lynette-and-vstd.md`](tooling/lynette-and-vstd.md).
+- `tools/verusage_hands_off/` -> external-agent (opencode) pilot harness; outputs land under `runs/verusage_hands_off/` (gitignored). read [`tooling/verusage-hands-off-pilot.md`](tooling/verusage-hands-off-pilot.md).
 - `assets/` -> docs/site images; usually ignore.
 
 warning

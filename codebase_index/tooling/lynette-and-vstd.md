@@ -4,6 +4,7 @@
 
 - If you are asking "why not just use Verus output?" the answer is: Verus says whether code verifies; Lynette helps this repo inspect and transform proof-oriented code.
 - The recurring Lynette jobs here are ghost/assertion location extraction, nonlinear detection, and code/invariant merging.
+- Paper "cheat checker" maps to Lynette's allowed-additions/no-cheating check: `utils/lynette/source/lynette/src/additions.rs`, CLI command `lynette additions <original> <changed>`.
 
 - If the bug is about missing library facts or bad retrieval, start in `verusage/vstd_library/`.
 - If the bug is about Verus syntax parsing or structural rewriting, you may need `utils/lynette/` plus `autoverus/lynette.py` or `verusage/lynette.py`.

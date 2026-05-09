@@ -8,6 +8,7 @@
   - Pre-generated experiment results / artifact-reproduction context -> [`data/generated-results.md`](data/generated-results.md).
   - Public results website / submission schema -> [`data/leaderboard.md`](data/leaderboard.md).
 - If you need the parser / retrieval tooling around Verus itself -> [`tooling/lynette-and-vstd.md`](tooling/lynette-and-vstd.md).
+- If the task is about the third-party-agent "hands-off" pilot harness (opencode-driven, stripped benchmark, transcript+cost capture) -> [`tooling/verusage-hands-off-pilot.md`](tooling/verusage-hands-off-pilot.md).
 
 warning
 

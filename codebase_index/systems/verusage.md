@@ -5,6 +5,7 @@
 - If you need the standard-library retrieval implementation split, read [`verusage-vstd-library.md`](verusage-vstd-library.md).
 - `agents/prompts/` holds prompt templates. `run_batch.py` is the practical batch runner over `.rs` files.
 - `veval.py` still handles verification/error parsing; Lynette-backed helpers are mostly for safety checks and better structural locations.
+- Paper "Hands-Off" is external to this package: arXiv source `design.tex` describes CLI agents + Verus + cheat checker + raw `vstd`; do not map it to `verusage/main.py --is-baseline`. Our local hands-off-style pilot lives outside `verusage/` under `tools/verusage_hands_off/` — see [`../tooling/verusage-hands-off-pilot.md`](../tooling/verusage-hands-off-pilot.md).
 - `agent_framework.py` is a compatibility re-export; real logic lives in `verusage/agents/`.
 
 warning
