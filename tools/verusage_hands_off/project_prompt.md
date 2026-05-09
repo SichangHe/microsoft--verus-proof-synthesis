@@ -15,7 +15,7 @@ Rules:
 Verification:
 - Iterate with `./verify_target.sh` until the target file verifies.
 - Run `./validate_edits.sh` to confirm only the target changed and the change passes the checker.
-- Before finishing, run `./verify_project.sh` if it is not prohibitively slow.
+- Success is defined by `./verify_target.sh` returning a clean Verus result on the target file. There is no whole-project verifier in this workspace; the surrounding `codebase/` files are read-only context, and most of them are not standalone-verifiable crates.
 - Leave the final proof in place in the target file; do not create a separate answer file.
 
 Be concise and persistent: inspect only what is needed, repair the proof, verify it, and stop.

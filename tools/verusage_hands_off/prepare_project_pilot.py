@@ -118,24 +118,6 @@ def write_verify_scripts(out_dir: Path, target_rel: Path) -> None:
         f"exec \"$VERUS\" --crate-type=lib {target}\n"
     )
     target_script.chmod(0o755)
-    project_script = out_dir / "verify_project.sh"
-    project_script.write_text(
-        "#!/usr/bin/env bash\n"
-        "set -euo pipefail\n"
-        "VERUS=${VERUS:-verus}\n"
-        "failed=0\n"
-        "while IFS= read -r -d '' f; do\n"
-        "  echo \"== $f\"\n"
-        "  st=0\n"
-        "  out=$(\"$VERUS\" --crate-type=lib \"$f\" 2>&1) || st=$?\n"
-        "  printf '%s\\n' \"$out\"\n"
-        "  if [ \"$st\" -ne 0 ] || printf '%s\\n' \"$out\" | grep -Eq '(^error:|verification results:: .* [1-9][0-9]* errors)'; then\n"
-        "    failed=1\n"
-        "  fi\n"
-        "done < <(find codebase -type f -name '*.rs' -print0 | sort -z)\n"
-        "exit $failed\n"
-    )
-    project_script.chmod(0o755)
 
 
 def sha256(path: Path) -> str:
@@ -232,7 +214,7 @@ def main() -> int:
         f"Task: `{args.task}`.\n"
         f"Target file: `codebase/{target_rel}`.\n"
         f"Target function: `{args.target_name}`.\n"
-        f"Verification: run `./verify_target.sh` while iterating; run `./verify_project.sh` before finishing.\n"
+        f"Verification: run `./verify_target.sh` while iterating. Success is defined by the target file verifying.\n"
         f"Removed local helper proof functions: {len(removed)}.\n"
         "Do not inspect files outside this directory. Focus on the target file and nearby definitions under `codebase/`.\n"
         "Edit only the target file. Run `./validate_edits.sh` before finishing.\n"

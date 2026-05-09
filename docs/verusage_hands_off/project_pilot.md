@@ -8,8 +8,7 @@ The generated directory contains:
 
 - `codebase/`: the project-style Verus files available to the agent.
 - `BENCHMARK_CONTEXT.md`: target file, target function, and focus instructions.
-- `verify_target.sh`: Verus check for the target file.
-- `verify_project.sh`: Verus check for every `.rs` file in `codebase/`.
+- `verify_target.sh`: Verus check for the target file. This is the authoritative success signal.
 - `validate_edits.sh`: enforces target-only edits inside the agent-visible workspace.
 
 A sibling `_eval/<run-name>/` directory holds checker inputs that the agent must not see: `original_unverified.rs` preserves the original benchmark file for provenance, and `lynette_baseline.rs` mirrors the agent-visible stripped target. `check_solution.sh` runs Verus and the edit guard from there; it can also run `lynette additions` against the baseline if `LYNETTE_ADDITIONS=1` is set, but that is opt-in for ad-hoc inspection — the standard policy is **Verus + edit-guard only, plus the agent's own self-report**, not an automated cheat checker.
