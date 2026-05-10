@@ -9,7 +9,8 @@ Flags four categories of forbidden tool use, per `agent_prompt.md`:
 - NET-cmd  : Bash that contacts a remote host (curl, wget, gh, git
              fetch/clone/pull/push/remote, cargo search/fetch/install,
              pip install, npm install).
-- NET-tool : direct WebFetch / WebSearch tool use.
+- NET-tool : direct WebFetch / WebSearch tool use. WebFetch against
+             `verus-lang.github.io` is carved out (Verus language docs).
 - OUT-bash : Bash that reads or greps outside the pilot repo. Reads under
              `~/.cargo/registry/src/.../vstd-<version>/` are NOT flagged
              since vstd is the standard library and Phase 2 confirmed it
@@ -78,6 +79,9 @@ def scan(jsonl_path: str, repo: str) -> list[Flag]:
                 name = c.get("name", "")
                 inp = c.get("input", {}) or {}
                 if name in ("WebFetch", "WebSearch"):
+                    url = (inp.get("url") or "") if name == "WebFetch" else ""
+                    if name == "WebFetch" and "verus-lang.github.io" in url:
+                        continue
                     flags.append(Flag("NET-tool", name, json.dumps(inp)[:200]))
                     continue
                 if name == "Bash":
