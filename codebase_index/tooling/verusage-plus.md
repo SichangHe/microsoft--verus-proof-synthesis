@@ -4,6 +4,7 @@
   - [`tools/verusage_plus/strip_proofs.py`](../../tools/verusage_plus/strip_proofs.py) — splices `unverified/<task>.rs` bodies into the upstream files. Manifest format: `<task_name>\t<upstream_file>\t<fn_name>`.
   - [`tools/verusage_plus/vest_targets.txt`](../../tools/verusage_plus/vest_targets.txt) — Vest's 22 VE targets, the only manifest written so far.
   - [`tools/verusage_plus/agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) — hardened agent prompt template; pilot branches embed a filled-in copy as `AGENTS.md`.
+  - [`tools/verusage_plus/extract_turns.py`](../../tools/verusage_plus/extract_turns.py) — render a Claude stream-json transcript as a numbered, PWD-stripped turn sketch (THINK / TEXT / one-line tool-call) for human review. Each pilot's `launch.sh` runs it after the agent exits, writing `logs/turns.txt` next to `claude_run.jsonl`. Reusable on past runs: `python3 tools/verusage_plus/extract_turns.py <run>/logs/claude_run.jsonl`.
   - [`docs/verusage_plus/HANDOFF.md`](../../docs/verusage_plus/HANDOFF.md) — entry point for picking up where Phase 1 ended.
   - [`runs/verusage_plus/<proj>__<tag>__<UTC>/`](../../runs/verusage_plus/) — per-pilot transcript / cost / report. Gitignored (under the existing `runs/` rule).
 - Branching convention in each upstream fork: `main` (mirror) → `verusage_plus` (pinned Verus + 22-or-N stripped functions) → `pilot/<proj>-<tag>-<UTC>` (per-attempt working branch with `AGENTS.md` and `VERUSAGE_PLUS_TARGETS.txt` at the root).
