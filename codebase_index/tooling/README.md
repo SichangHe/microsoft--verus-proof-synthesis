@@ -1,2 +1,3 @@
 - Parser / Rust tooling / Lynette wrapper context / `vstd` retrieval -> [`lynette-and-vstd.md`](lynette-and-vstd.md).
 - Project-level hands-off pilot harness (`tools/verusage_hands_off/`, `runs/verusage_hands_off/`, `docs/verusage_hands_off/`) — third-party agent (`opencode`) drives a stripped benchmark end-to-end, with cost/transcript/validation captured -> [`verusage-hands-off-pilot.md`](verusage-hands-off-pilot.md).
+- VeruSAGE+ full-repo harness (`tools/verusage_plus/`, `runs/verusage_plus/`, `docs/verusage_plus/`) — pivoted to forking each VeruSAGE upstream project, stripping benchmark proofs in place, and validating with `cargo verus verify` -> [`verusage-plus.md`](verusage-plus.md).
