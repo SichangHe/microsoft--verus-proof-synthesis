@@ -10,5 +10,8 @@ __pycache__
 # Long-running plan scratch files (per AGENTS.md autonomous mode)
 /PLAN-*.md
 
+# Claude Code session-local state (settings.local.json, scheduled_tasks.lock, …)
+/.claude/
+
 # Earlier plan scratchpad written by a previous agent
 /VERUSAGE_HANDS_OFF_REPRODUCTION_PLAN.md
