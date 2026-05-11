@@ -39,6 +39,23 @@ Per-target $ for **closed** targets: Vest-P2 = $0.54, AL = $0.33, AC = $1.83, MA
 
 Total spend through Phase 3: ~$137 (incl. older slice pilots: $2.58, Phase 1 $1.78, Phase 2 $11.88, AC $31.16, MA $60.26, AL $31.49).
 
+## Phase-3 lessons — what we learned, what we changed
+
+Full analysis with event-level evidence: [`docs/verusage_plus/phase3_postmortem.md`](../../docs/verusage_plus/phase3_postmortem.md). Headline findings (each is N=1 per pilot — pattern-based inference, not statistical):
+
+1. **Sustained context wear correlates with failure**. Green pilots (Vest P2, AL) peaked at 213 k / 279 k tokens; partial/failed (AC, MA) at 366 k / 367 k against a 400 k window. MA additionally underwent compaction mid-run and then issued its catastrophic regression edit post-compaction; AC stayed chronically near-limit without resetting. Belief, not proven: both regimes (near-limit-no-reset and compact-then-recover) are dangerous, while the green pilots stayed in neither.
+2. **The "while the verifier runs" parallel-edit pattern is MA-exclusive** (6 verbalizations vs 0 in any other pilot). It was the proximate cause of MA's downward spiral after it reached 1 error remaining at E6046. Now prompt-banned.
+3. **Error count must trend down across edits**. AC's E8775 text — *"Good progress — we're past compile errors. Now these are Verus verification errors"* — shows the agent treating a 4→34 error jump as forward progress because the *phase* moved forward. Now prompt rule: count must trend down, roll back if it rises.
+4. **`--verify-module` discipline is a double dividend**. AL used it 105×, MA/AC 0×. Narrow verifies are fast (seconds vs minutes) AND produce small outputs that don't bloat context. Now in the prompt as the iteration default.
+5. **Tee-then-grep eliminates ~80 % of redundant verifier calls.** All four pilots ran 78–94 % of consecutive verifier calls with the same core command and only the grep tail varying. None used `tee` systematically. Now in the prompt with a worked example.
+6. **AC's failure shape is coverage, not domain difficulty.** 3 of 8 target files received 0 edits despite 21 reads; the agent greedy-finished the easier files. Now prompt has *"leave it and move on, append to `SKIPPED.md`"* convention.
+7. **Whole-run stuck → exit, don't grind.** New [`request_review.sh`](../../tools/verusage_plus/request_review.sh) lets the agent write `STUCK.md`, email a supervisor, and stop when error count plateaus, ideas are exhausted, or the verifier keeps reporting non-proof-level errors (`cannot find function`, `mismatched types`, `expected ','`) that signal helper-hallucination.
+8. **Domain-tactic hints are deliberately withheld.** MA mentioned `integer_ring` 59 times and never used it; we record this as a finding about the agent's tactic-search priors, not as a harness gap. The benchmark is meant to be a worst-case eval (no project-specific guidance).
+
+Deliberately not done (with reasons in the postmortem): sandboxing, hard-numeric agent triggers, pre-generated helper-signature files, per-project tactic hints, edit-granularity caps.
+
+Validation experiments are queued but not yet run: re-run MA at $30 and AC at $40 with the upgraded prompt; pass criteria in the postmortem's *Validation plan*.
+
 ## Tools (`tools/verusage_plus/`)
 
 - [`strip_proofs.py`](../../tools/verusage_plus/strip_proofs.py) — splices `unverified/<task>.rs` bodies into the upstream files. Manifest format: `<task_name>\t<upstream_file>\t<fn_name>`.
@@ -50,6 +67,9 @@ Total spend through Phase 3: ~$137 (incl. older slice pilots: $2.58, Phase 1 $1.
   - Forbid non-HEAD git refs (closes Phase-1 Vest cheat).
   - Forbid network except `verus-lang.github.io`.
   - Forbid `find /` and root-walks (Phase-3 NFS-hang remedy; reinforced by the new "Where to find things" guidance).
+  - **Verifier-loop discipline** (Phase-3 lessons — see [`docs/verusage_plus/phase3_postmortem.md`](../../docs/verusage_plus/phase3_postmortem.md)): synchronous-oracle ban on "while the verifier runs" parallel-edits; error count must trend down across edits with rollback on regression; `tee /tmp/v.out` + grep the cache instead of re-running the verifier with new grep tails; `--verify-module`/`--verify-function` for per-iteration scoping with the full verify reserved for the closing run; `grep -rn 'pub proof fn '` teach-fishing recipe for vstd discovery.
+  - **Stuck-out behaviour**: an unclosable target gets a one-line append to `SKIPPED.md` and the agent moves on (coverage > polish). Whole-run stuck → call `request_review.sh` and stop.
+- [`request_review.sh`](../../tools/verusage_plus/request_review.sh) — agent-invokable from the pilot working tree. Writes `STUCK.md` to `$FORK_REPO` and emails the supervisor via `~/.config/helper.sh/email_me.py` with the agent's one-paragraph status. Prints a stop instruction back to the agent (which the prompt instructs the agent to obey). `run_pilot.sh` prepends `tools/verusage_plus/` to PATH so the agent can invoke it by name. Exit code 0 so the calling Bash tool doesn't error before the agent reads the stop message.
 - [`run_pilot.sh`](../../tools/verusage_plus/run_pilot.sh) — reusable launch driver. Per-run `launch.sh` files set six env vars (`RUN_DIR`, `FORK_REPO`, `RUN_NAME`, `BUDGET_USD`, `VERUS_BIN`, optional `VSTD_PREFIX` / `EXTRA_PATH` / `EXTRA_ENV`) and `exec` this script. Driver does:
   - Wraps `claude` with `setsid` so it gets its own process group, then SIGKILLs the whole pgroup at script exit. Catches detached `find`/`grep` orphans (Phase-3 MA wedged 5 h on NFS; Phase-3 AL wedged 2 h before manual SIGKILL).
   - Runs `extract_turns.py` and `cheat_scan.py` (with `--vstd-extra-prefix $VSTD_PREFIX`) automatically post-exit. Closes the manual cheat-scan gap that operators had to remember through Phase 3.
