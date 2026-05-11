@@ -248,12 +248,12 @@ Single commit `286419a4` on branch `explore`:
   sections: *If a target won't close*, *If you're stuck across the run*,
   *Common pitfalls* (operator instructions extracted: tee large outputs,
   timeout/background, batch commands, frequently consider whether stuck).
-- `tools/verusage_plus/request_review.sh` — agent-invokable: writes
-  `STUCK.md` to the pilot working tree, emails the supervisor via
-  `~/.config/helper.sh/email_me.py`, prints a stop instruction.
+- `tools/verusage_plus/request_review.sh` — agent-invokable: prints the
+  agent's one-paragraph status to stdout (which lands in the run
+  transcript) and exits. No side effects on disk, no email — the human
+  supervisor is already watching the run, so the transcript is sufficient.
 - `tools/verusage_plus/run_pilot.sh` — prepends `tools/verusage_plus/`
-  to the agent's PATH so `request_review.sh` is invocable by name;
-  exports `FORK_REPO` so child processes find the pilot tree.
+  to the agent's PATH so `request_review.sh` is invocable by name.
 
 No domain-tactic riders. No `VERUSAGE_PLUS_SCOPE.txt` pre-generation
 (teach-fishing instead). No hard numeric triggers (the trigger conditions

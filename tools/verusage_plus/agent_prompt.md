@@ -93,7 +93,7 @@ Call `request_review.sh` and stop your turn when **any** of the following holds:
 request_review.sh "Stuck after N targets closed. Current error count M. What I tried last: X. What I think is blocking: Y."
 ```
 
-The script emails a supervisor with your status and writes `STUCK.md` to the repo root. After calling it, end your turn — issue no further tool calls. A human will look and either resume the session with feedback or close the run.
+The script prints your status (visible in the run transcript) and exits. End your turn after calling it — issue no further tool calls. A supervisor watching the run will see your status and decide whether to resume this pilot branch or close it.
 
 # Common pitfalls
 
