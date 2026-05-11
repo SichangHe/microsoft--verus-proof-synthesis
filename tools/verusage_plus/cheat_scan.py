@@ -35,8 +35,9 @@ from dataclasses import dataclass
 
 GIT_CMD_RE = re.compile(
     r"\bgit\s+("
-    r"diff|log|show|checkout|stash|reflog|fetch|ls-tree|cat-file|"
-    r"rev-list|merge-base|describe|blame|worktree"
+    r"diff|log|show|checkout|reflog|fetch|ls-tree|cat-file|"
+    r"rev-list|merge-base|describe|blame|worktree|"
+    r"stash\s+(?:show|apply|drop|branch|list)"
     r")\b"
 )
 NET_CMD_RE = re.compile(
@@ -48,7 +49,10 @@ NET_CMD_RE = re.compile(
     r")\b"
 )
 VSTD_CACHE_RE = re.compile(
-    r"/\.cargo/registry/src/[^/\s]+/vstd-[0-9]+\.[0-9]+\.[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}/"
+    r"/\.cargo/(?:"
+    r"registry/src/[^/\s]+/vstd-[0-9]+\.[0-9]+\.[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}/|"
+    r"git/checkouts/verus-[^/\s]+/[^/\s]+/source/vstd/"
+    r")"
 )
 
 
@@ -63,8 +67,23 @@ def is_outside_repo(path: str, repo: str) -> bool:
     return not path.startswith(repo)
 
 
-def scan(jsonl_path: str, repo: str) -> list[Flag]:
+HARNESS_PATH_RE = re.compile(
+    r"^(?:/tmp/claude-[^/]+/|/home/[^/]+/\.claude/projects/)"
+)
+
+
+def scan(jsonl_path: str, repo: str, extra_vstd_prefixes: list[str]) -> list[Flag]:
     flags: list[Flag] = []
+    extra_prefixes = [p.rstrip("/") + "/" for p in extra_vstd_prefixes]
+
+    def is_extra_vstd(path: str) -> bool:
+        return any(path.startswith(p) for p in extra_prefixes)
+
+    def is_harness_scratch(path: str) -> bool:
+        return bool(HARNESS_PATH_RE.match(path))
+
+    extra_re = re.compile("|".join(re.escape(p) for p in extra_prefixes)) if extra_prefixes else None
+
     with open(jsonl_path) as f:
         for line in f:
             try:
@@ -91,21 +110,29 @@ def scan(jsonl_path: str, repo: str) -> list[Flag]:
                     if NET_CMD_RE.search(cmd):
                         flags.append(Flag("NET-cmd", name, cmd[:200]))
                     cmd_no_vstd = VSTD_CACHE_RE.sub("VSTD/", cmd)
+                    if extra_re is not None:
+                        cmd_no_vstd = extra_re.sub("VSTD/", cmd_no_vstd)
                     repo_parent = "/".join(repo.rstrip("/").split("/")[:-1]) or "/"
                     repo_leaf = repo.rstrip("/").split("/")[-1]
-                    # Outside-repo siblings: same parent, different leaf.
                     sibling_re = re.compile(
                         re.escape(repo_parent + "/") + r"(?!" + re.escape(repo_leaf) + r"(?:/|\b))"
                     )
                     misc_out_re = re.compile(
-                        r"(/home/[^/]+/\.cargo/(?!registry/src/[^/]+/vstd-)|"
+                        r"(/home/[^/]+/\.cargo/(?!"
+                        r"registry/src/[^/]+/vstd-|"
+                        r"git/checkouts/verus-)|"
                         r"/home/[^/]+/\.rustup/|/var/|/etc/passwd)"
                     )
                     if sibling_re.search(cmd_no_vstd) or misc_out_re.search(cmd_no_vstd):
                         flags.append(Flag("OUT-bash", name, cmd[:200]))
                 if name == "Read":
                     path = inp.get("file_path", "") or ""
-                    if path and is_outside_repo(path, repo) and not VSTD_CACHE_RE.search(path):
+                    if (
+                        path and is_outside_repo(path, repo)
+                        and not VSTD_CACHE_RE.search(path)
+                        and not is_extra_vstd(path)
+                        and not is_harness_scratch(path)
+                    ):
                         flags.append(Flag("OUT-read", name, path))
     return flags
 
@@ -126,12 +153,17 @@ def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     _ = p.add_argument("jsonl", help="Path to claude_run.jsonl")
     _ = p.add_argument("--repo", help="Pilot repo absolute path (default: cwd from init event)")
+    _ = p.add_argument(
+        "--vstd-extra-prefix", action="append", default=[],
+        help="Additional outside-repo path prefix that should be allow-listed like the "
+             "vstd cache (e.g. /ssd1/.../verus/source/vstd/). Repeatable.",
+    )
     args = p.parse_args(argv)
     repo = args.repo or init_cwd(args.jsonl)
     if not repo:
         print("error: could not determine repo path; pass --repo", file=sys.stderr)
         return 2
-    flags = scan(args.jsonl, repo)
+    flags = scan(args.jsonl, repo, args.vstd_extra_prefix)
     print(f"repo: {repo}")
     print(f"flags: {len(flags)}")
     for fl in flags:
