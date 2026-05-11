@@ -4,8 +4,8 @@ beside it. Both files are written into the upstream repo's working tree (not com
 here — caller commits onto the pilot branch).
 
 The variable values are passed via --var KEY=VALUE flags. Required variables:
-  repo_path, pilot_branch, base_branch, verify_command, verify_dir, verify_setup,
-  rust_toolchain, n_targets, initial_errors, vstd_paths.
+  repo_path, verify_command, verify_dir, verify_setup, n_targets, initial_errors,
+  vstd_paths.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ def main() -> int:
     for k, v in vars_in.items():
         rendered = rendered.replace("{{" + k + "}}", v)
     missing = [tok for tok in [
-        "repo_path", "pilot_branch", "base_branch", "verify_command", "verify_dir",
-        "verify_setup", "rust_toolchain", "n_targets", "initial_errors", "vstd_paths",
+        "repo_path", "verify_command", "verify_dir", "verify_setup",
+        "n_targets", "initial_errors", "vstd_paths",
     ] if "{{" + tok + "}}" in rendered]
     if missing:
         raise SystemExit(f"unfilled variables: {missing}")

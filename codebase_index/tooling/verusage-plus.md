@@ -60,8 +60,8 @@ Validation experiments are queued but not yet run: re-run MA at $30 and AC at $4
 
 - [`strip_proofs.py`](../../tools/verusage_plus/strip_proofs.py) — splices `unverified/<task>.rs` bodies into the upstream files. Manifest format: `<task_name>\t<upstream_file>\t<fn_name>`.
 - [`build_manifest.py`](../../tools/verusage_plus/build_manifest.py) — given a `mapping_<proj>.txt`, the unverified dir, and the upstream src tree, emits the manifest with strict suffix-match resolution. For task `vreplicaset_controller__proof__guarantee__guarantee_condition_holds`, only an `fn guarantee_condition_holds` in the unverified file AND in the upstream src tree resolves; helper fns in the same unverified file are NOT acceptable substitutes (an earlier loose match silently wrong-resolved AC targets to vstd_ext helpers). Multi-candidate resolution uses path-component scoring against the task's `__`-split prefix; the scoring treats `<stem>.rs` as a match for `<stem>` (so `commit_mask__impl__empty` resolves to `commit_mask.rs::empty`). Targets present in the mapping but absent from the current upstream HEAD (refactored away) are emitted as `# UNRESOLVED ...` comments; the strip script ignores them.
-- [`build_pilot.py`](../../tools/verusage_plus/build_pilot.py) — renders `AGENTS.md` from [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) with `--var KEY=VALUE` substitutions, and emits `VERUSAGE_PLUS_TARGETS.txt` (`<file>\t<fn>` per line) alongside it. Required keys: `repo_path`, `pilot_branch`, `base_branch`, `verify_command`, `verify_dir`, `verify_setup`, `rust_toolchain`, `n_targets`, `initial_errors`, `vstd_paths`. Writes both files into the upstream repo root; caller commits them on the pilot branch.
-- [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) — hardened agent prompt template; pilot branches embed a filled-in copy as `AGENTS.md`. Variables in `{{...}}` are project-specific; the same template covers `cargo verus verify`, `./build.sh ...`, and `./verus-mimalloc/verify.sh` flows by varying `verify_command` and `verify_setup`. Key clauses:
+- [`build_pilot.py`](../../tools/verusage_plus/build_pilot.py) — renders `AGENTS.md` from [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) with `--var KEY=VALUE` substitutions, and emits `VERUSAGE_PLUS_TARGETS.txt` (`<file>\t<fn>` per line) alongside it. Required keys: `repo_path`, `verify_command`, `verify_dir`, `verify_setup`, `n_targets`, `initial_errors`, `vstd_paths`. Writes both files into the upstream repo root; caller commits them on the pilot branch.
+- [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) — hardened agent prompt template. The file is **entirely the agent-visible prompt** — no meta-comment block at the top, since the rendered output goes verbatim into AGENTS.md in the pilot working tree (`build_pilot.py` only substitutes `{{...}}` variables; nothing is stripped). Keep it that way: any documentation about the template belongs here in the codebase index, not in the template body, so the agent doesn't read stale "this file is what the harness writes…" prose. The template covers `cargo verus verify`, `./build.sh ...`, and `./verus-mimalloc/verify.sh` flows by varying `verify_command` and `verify_setup`. Key clauses:
   - The **output line** (`verification results:: <N> verified, 0 errors`) is the authoritative success signal, not the exit code: Verus exits non-zero even on a clean verification under `--crate-type lib + --compile` (Anvil's `anvil.rs` lib build) and aborts before printing the summary line when any errors exist.
   - **"Where to find things"** subsection up-front pins the two paths the agent should ever read from: `{{repo_path}}` (project source) and `{{vstd_paths}}` (vstd source). This was promoted from a buried "Permitted exceptions" bullet after Phase-3 AL/MA agents `find /`-walked NFS-stuck even with vstd paths listed in the forbidden-exceptions section. Surfacing the path with concrete `ls`/`grep`/`find` examples is the prompt-side remedy.
   - Forbid non-HEAD git refs (closes Phase-1 Vest cheat).
@@ -145,12 +145,9 @@ python3 $REPO/tools/verusage_plus/build_pilot.py \
   --manifest $REPO/tools/verusage_plus/<code>_targets.txt \
   --out-dir <fork> \
   --var repo_path=<fork> \
-  --var pilot_branch=pilot/<CODE>-allN-$UTC \
-  --var base_branch=verusage_plus[_TAG] \
   --var "verify_command=<from matrix>" \
   --var verify_dir=<fork> \
   --var "verify_setup=<one sentence about prebuilt deps + env vars>" \
-  --var rust_toolchain=1.95.0 \
   --var n_targets=<N> --var initial_errors=<N or higher> \
   --var "vstd_paths=<path to bundled vstd>"
 git add AGENTS.md VERUSAGE_PLUS_TARGETS.txt && \
