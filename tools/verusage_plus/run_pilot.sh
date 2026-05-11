@@ -25,8 +25,13 @@ set -euo pipefail
 : "${BUDGET_USD:?missing}"; : "${VERUS_BIN:?missing}"
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+TOOLS_DIR="$REPO_ROOT/tools/verusage_plus"
 mkdir -p "$RUN_DIR/logs"
-export PATH="${EXTRA_PATH:+$EXTRA_PATH:}$VERUS_BIN:$PATH"
+# Prepend TOOLS_DIR so the agent can invoke harness helpers (`request_review.sh`)
+# by name from any cwd. Also prepend EXTRA_PATH and VERUS_BIN.
+export PATH="${EXTRA_PATH:+$EXTRA_PATH:}$VERUS_BIN:$TOOLS_DIR:$PATH"
+# Export FORK_REPO so child processes (request_review.sh) can find the pilot tree.
+export FORK_REPO
 [[ -n "${EXTRA_ENV:-}" ]] && eval "$EXTRA_ENV"
 cd "$FORK_REPO"
 

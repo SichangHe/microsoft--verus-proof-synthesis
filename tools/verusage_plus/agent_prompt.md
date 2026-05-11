@@ -49,11 +49,60 @@ We rely on your honesty rather than an automated cheat checker. If you could not
 
 # How to iterate
 
-- Run `{{verify_command}}` from `{{verify_dir}}` to see remaining errors. Initial state has {{initial_errors}} errors.
-- Iterate: read the failing function, write the proof, re-verify. You may add helper lemmas in the same file.
-- Use `--rlimit` and `--multiple-errors N` Verus flags when helpful (Verus accepts them after the entry-point file or after `--`, depending on the wrapping script — check what the verify command tolerates).
-- **Try ideas instead of debating them.** The verifier is your oracle, and a failed verify costs only seconds-to-tens-of-seconds. If you have a candidate proof tactic, write it and run the verifier rather than reasoning at length about whether it will work. Verus rejects bad ideas at almost no cost, so prefer fast empirical iteration over long deliberation.
-- When the verifier output reports `verified, 0 errors` (and that result includes the {{n_targets}} target functions you are working on), you are done.
+Run `{{verify_command}}` from `{{verify_dir}}` to see remaining errors. Initial state has {{initial_errors}} errors. Read a failing function, write the proof, re-verify. You may add helper `proof fn` lemmas in the same file.
+
+**Synchronous oracle discipline.** After every verifier run, wait for the result before any further `Edit`, `Write`, or other state-changing tool call. Do not start a second verifier call while the first is in flight. Do not edit "while the verifier runs" — parallel editing destroys the feedback loop and is the single most common cause of cascading regressions.
+
+**Error count must trend down across edits.** Remember the previous count; compare it to the new one. If the new count went up, your last edit regressed something — read the new errors, decide if the edit is salvageable, and roll back to the prior version (`git diff <file>` then revert the relevant hunk) if not. Compile-error → verification-error is **not** progress unless the verification-error count also dropped. Track the count and what is still empty in working memory across turns; don't re-derive each cycle.
+
+**Tee the verifier output once and grep the cache.** Verus is slow; re-running it to refine a grep is waste:
+```
+{{verify_command}} 2>&1 | tee /tmp/v.out
+grep -E "<pattern>" /tmp/v.out
+```
+
+**Scope the verifier when iterating on one piece.** Verus accepts `--verify-module <path::to::mod>` and `--verify-function <name>` after the entry-point file (or after `--`, depending on the wrapper — try the simpler form first). Narrowed verification typically runs in seconds; the full-crate run takes much longer. Run the narrowed form during iteration and the full {{verify_command}} for the final closing check.
+
+**Try ideas instead of debating them.** The verifier is your oracle, and a failed verify costs only seconds. If you have a candidate tactic, write it and verify rather than reasoning at length about whether it will work.
+
+**Discovering helpers (don't memorize vstd, query it).** vstd is large. Examples that work from any directory:
+```
+grep -rn 'pub proof fn \|pub spec fn ' {{vstd_paths}} | head -50
+grep -rn 'lemma_seq_\|lemma_set_' {{vstd_paths}}
+```
+Reading existing usages elsewhere in `{{repo_path}}` is often the quickest way to learn a helper's calling shape.
+
+You are done when {{verify_command}} (without narrowing) reports `verified, 0 errors` and the result includes the {{n_targets}} target functions.
+
+# If a target won't close in this run
+
+If your last few attempts at a target didn't reduce its error count, leave it and move on. Coverage across all target files beats polishing one. Append a one-line entry to `SKIPPED.md` at the repo root so a successor (or later you) can revisit:
+```
+<file>::<fn> — what I tried — why I gave up
+```
+
+# If you're stuck across the whole run
+
+Call `request_review.sh` and stop your turn when **any** of the following holds:
+
+- The overall error count has not decreased across many verifier calls in a row.
+- Your last few plans haven't worked and you have no fresh ideas.
+- The verifier keeps reporting `cannot find function`, `mismatched types`, or `expected ','` on your edits — those errors have no proof-level meaning and usually mean you are inventing names or syntax that don't exist.
+
+```
+request_review.sh "Stuck after N targets closed. Current error count M. What I tried last: X. What I think is blocking: Y."
+```
+
+The script emails a supervisor with your status and writes `STUCK.md` to the repo root. After calling it, end your turn — issue no further tool calls. A human will look and either resume the session with feedback or close the run.
+
+# Common pitfalls
+
+These apply to every long-running task; they are easy to fall into:
+
+- Tee any non-trivial command output to a temp file and treat it as potentially large. Don't re-run an expensive command to refine a grep — grep the tee.
+- Always run commands with a timeout to avoid hanging, or background them and periodically check logs and exit status.
+- Combine multiple simple commands into one shell call to avoid round trips.
+- Frequently consider whether you are stuck. If you're not making progress (commands hanging, the same error recurring across edits, the same plan attempted twice), reflect on what you have been doing and whether your assumptions may be wrong. Do an easier test to validate the assumption before continuing on the harder problem.
 
 # Finishing
 
