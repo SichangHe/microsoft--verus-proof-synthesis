@@ -18,6 +18,12 @@
 #   EXTRA_PATH    extra dirs to prepend to PATH (e.g. nix Singular dir)
 #   EXTRA_ENV     extra `export X=Y;` snippet evaluated before the launch
 #                 (e.g. `export VERUS_SINGULAR_PATH=...`)
+#   VERIFIER_CMD  full verifier invocation (incl. any `cd` / wrappers) to
+#                 run from FORK_REPO after the agent exits. When set, the
+#                 stdout+stderr lands in `<run>/verifier_final.out` and
+#                 `error_map.py` derives final stats into
+#                 `<run>/error_map.tsv` (no manifest; target set comes
+#                 from the verifier output itself).
 #   CLAUDE_MODEL  default `claude-sonnet-4-6`
 #   CLAUDE_EFFORT default `high`
 set -euo pipefail
@@ -73,5 +79,16 @@ python3 "$REPO_ROOT/tools/verusage_plus/cheat_scan.py" \
   --repo "$FORK_REPO" \
   "${extra_vstd[@]}" \
   > "$RUN_DIR/cheat_scan.txt" 2>&1 || true
+
+# Final stats from Verus output, derived without a manifest so the
+# numbers reflect what the verifier sees on the agent's HEAD.
+if [[ -n "${VERIFIER_CMD:-}" ]]; then
+  bash -c "$VERIFIER_CMD" > "$RUN_DIR/verifier_final.out" 2>&1 || true
+  python3 "$REPO_ROOT/tools/verusage_plus/error_map.py" \
+    --repo "$FORK_REPO" \
+    --verifier-output "$RUN_DIR/verifier_final.out" \
+    --out "$RUN_DIR/error_map.tsv" \
+    > "$RUN_DIR/error_map.summary" 2>&1 || true
+fi
 
 exit "$rc"

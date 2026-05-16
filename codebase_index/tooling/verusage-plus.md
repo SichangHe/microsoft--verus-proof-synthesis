@@ -58,22 +58,27 @@ Validation experiments are queued but not yet run: re-run MA at $30 and AC at $4
 
 ## Tools (`tools/verusage_plus/`)
 
-- [`strip_proofs.py`](../../tools/verusage_plus/strip_proofs.py) — splices `unverified/<task>.rs` bodies into the upstream files. Manifest format: `<task_name>\t<upstream_file>\t<fn_name>`.
+- [`strip_proofs.py`](../../tools/verusage_plus/strip_proofs.py) — splices `unverified/<task>.rs` bodies into the upstream files. Manifest format: `<task_name>\t<upstream_file>\t<fn_name>`. The manifest at `tools/verusage_plus/<code>_targets.txt` lives harness-side only — it never enters the pilot working tree, so the agent never reads from it.
 - [`build_manifest.py`](../../tools/verusage_plus/build_manifest.py) — given a `mapping_<proj>.txt`, the unverified dir, and the upstream src tree, emits the manifest with strict suffix-match resolution. For task `vreplicaset_controller__proof__guarantee__guarantee_condition_holds`, only an `fn guarantee_condition_holds` in the unverified file AND in the upstream src tree resolves; helper fns in the same unverified file are NOT acceptable substitutes (an earlier loose match silently wrong-resolved AC targets to vstd_ext helpers). Multi-candidate resolution uses path-component scoring against the task's `__`-split prefix; the scoring treats `<stem>.rs` as a match for `<stem>` (so `commit_mask__impl__empty` resolves to `commit_mask.rs::empty`). Targets present in the mapping but absent from the current upstream HEAD (refactored away) are emitted as `# UNRESOLVED ...` comments; the strip script ignores them.
-- [`build_pilot.py`](../../tools/verusage_plus/build_pilot.py) — renders `AGENTS.md` from [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) with `--var KEY=VALUE` substitutions, and emits `VERUSAGE_PLUS_TARGETS.txt` (`<file>\t<fn>` per line) alongside it. Required keys: `repo_path`, `verify_command`, `verify_dir`, `verify_setup`, `n_targets`, `initial_errors`, `vstd_paths`. Writes both files into the upstream repo root; caller commits them on the pilot branch.
-- [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) — hardened agent prompt template. The file is **entirely the agent-visible prompt** — no meta-comment block at the top, since the rendered output goes verbatim into AGENTS.md in the pilot working tree (`build_pilot.py` only substitutes `{{...}}` variables; nothing is stripped). Keep it that way: any documentation about the template belongs here in the codebase index, not in the template body, so the agent doesn't read stale "this file is what the harness writes…" prose. The template covers `cargo verus verify`, `./build.sh ...`, and `./verus-mimalloc/verify.sh` flows by varying `verify_command` and `verify_setup`. Key clauses:
+- [`build_pilot.py`](../../tools/verusage_plus/build_pilot.py) — renders `AGENTS.md` from [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) with `--var KEY=VALUE` substitutions. Required keys: `repo_path`, `verify_command`, `verify_dir`, `verify_setup`, `vstd_paths`. Writes `AGENTS.md` into the upstream repo root; caller commits it on the pilot branch. No `VERUSAGE_PLUS_TARGETS.txt` is emitted — the agent's scope is whatever the verifier reports, not a curated manifest (the harness keeps the per-project manifest under `tools/verusage_plus/` for stripping and scoring, out of the agent's view). The script rejects unknown `--var` keys and missing required keys, so passing the old `n_targets` / `initial_errors` raises a hard error rather than silently rendering.
+- [`agent_prompt.md`](../../tools/verusage_plus/agent_prompt.md) — hardened agent prompt template. The file is **entirely the agent-visible prompt** — no meta-comment block at the top, since the rendered output goes verbatim into AGENTS.md in the pilot working tree (`build_pilot.py` only substitutes `{{...}}` variables; nothing is stripped). Keep it that way: any documentation about the template belongs here in the codebase index, not in the template body, so the agent doesn't read stale "this file is what the harness writes…" prose. The template covers `cargo verus verify`, `./build.sh ...`, and `./verus-mimalloc/verify.sh` flows by varying `verify_command` and `verify_setup`. The opening contract is "drive the verifier to `verified, 0 errors`" — the agent is given no error count, no target-function count, and no curated target list (a previous iteration shipped all three; they were redundant with the verifier's own output, went stale within seconds of the first edit, and decoupled the agent's self-reported scope from what was actually verifying). Key clauses:
   - The **output line** (`verification results:: <N> verified, 0 errors`) is the authoritative success signal, not the exit code: Verus exits non-zero even on a clean verification under `--crate-type lib + --compile` (Anvil's `anvil.rs` lib build) and aborts before printing the summary line when any errors exist.
   - **"Where to find things"** subsection up-front pins the two paths the agent should ever read from: `{{repo_path}}` (project source) and `{{vstd_paths}}` (vstd source). This was promoted from a buried "Permitted exceptions" bullet after Phase-3 AL/MA agents `find /`-walked NFS-stuck even with vstd paths listed in the forbidden-exceptions section. Surfacing the path with concrete `ls`/`grep`/`find` examples is the prompt-side remedy.
   - Forbid non-HEAD git refs (closes Phase-1 Vest cheat).
   - Forbid network except `verus-lang.github.io`.
   - Forbid `find /` and root-walks (Phase-3 NFS-hang remedy; reinforced by the new "Where to find things" guidance).
+  - **Forbid silencing the verifier by hiding the work** — no deleting, renaming, or relocating functions; no signature / visibility / attribute changes that suppress errors; no `#[verifier::external_fn_specification]` or analogous opt-outs; no redirecting call sites past a function to make its errors disappear. Necessary now that the prompt no longer ships a curated target list — "fix all reported errors" is a slightly broader contract than "fill these listed bodies", and this clause closes the obvious loophole.
   - **Verifier-loop discipline** (Phase-3 lessons — see [`docs/verusage_plus/phase3_postmortem.md`](../../docs/verusage_plus/phase3_postmortem.md)): synchronous-oracle ban on "while the verifier runs" parallel-edits; error count must trend down across edits with rollback on regression; `tee /tmp/v.out` + grep the cache instead of re-running the verifier with new grep tails; `--verify-module`/`--verify-function` for per-iteration scoping with the full verify reserved for the closing run; `grep -rn 'pub proof fn '` teach-fishing recipe for vstd discovery.
   - **Stuck-out behaviour**: an unclosable target gets a one-line append to `SKIPPED.md` and the agent moves on (coverage > polish). Whole-run stuck → call `request_review.sh` and stop.
 - [`request_review.sh`](../../tools/verusage_plus/request_review.sh) — agent-invokable from any cwd (the harness puts `tools/verusage_plus/` on PATH via `run_pilot.sh`). Takes a one-paragraph status, prints it to stdout (lands in the run transcript) and exits 0. The agent's prompt instructs it to stop issuing tool calls afterwards; a human watching the run sees the status in the transcript and decides whether to resume this pilot branch or close. No side effects on disk, no email — keeping the mechanism minimal because the supervisor is already watching the run.
-- [`run_pilot.sh`](../../tools/verusage_plus/run_pilot.sh) — reusable launch driver. Per-run `launch.sh` files set six env vars (`RUN_DIR`, `FORK_REPO`, `RUN_NAME`, `BUDGET_USD`, `VERUS_BIN`, optional `VSTD_PREFIX` / `EXTRA_PATH` / `EXTRA_ENV`) and `exec` this script. Driver does:
+- [`run_pilot.sh`](../../tools/verusage_plus/run_pilot.sh) — reusable launch driver. Per-run `launch.sh` files set six env vars (`RUN_DIR`, `FORK_REPO`, `RUN_NAME`, `BUDGET_USD`, `VERUS_BIN`, optional `VSTD_PREFIX` / `EXTRA_PATH` / `EXTRA_ENV` / `VERIFIER_CMD`) and `exec` this script. Driver does:
   - Wraps `claude` with `setsid` so it gets its own process group, then SIGKILLs the whole pgroup at script exit. Catches detached `find`/`grep` orphans (Phase-3 MA wedged 5 h on NFS; Phase-3 AL wedged 2 h before manual SIGKILL).
   - Runs `extract_turns.py` and `cheat_scan.py` (with `--vstd-extra-prefix $VSTD_PREFIX`) automatically post-exit. Closes the manual cheat-scan gap that operators had to remember through Phase 3.
+  - When `VERIFIER_CMD` is set, runs it after the agent exits, captures stdout+stderr into `<run>/verifier_final.out`, and invokes `error_map.py` (manifest-less mode) to land `<run>/error_map.tsv` and a one-line summary in `<run>/error_map.summary`. This is the harness-side "stats from Verus" path — the final error count and the list of error-bearing functions come from the verifier on HEAD, independent of any pre-computed numbers and of the agent's self-report.
 - [`extract_turns.py`](../../tools/verusage_plus/extract_turns.py) — renders a Claude stream-json transcript as a numbered, PWD-stripped turn sketch (THINK / TEXT / one-line tool-call) for human review. Each pilot's `launch.sh` runs it after the agent exits, writing `logs/turns.txt` next to `claude_run.jsonl`. Reusable on past runs: `python3 tools/verusage_plus/extract_turns.py <run>/logs/claude_run.jsonl`. **Subagent (`Agent` tool) child tool calls are NOT inlined** in the parent stream — turns.txt counts only parent activity; subagent edits are summarized as a single `Agent(...)` line. Inspect a subagent's transcript via the `~/.claude/projects/<proj>/<session_id>/tasks/<task_id>.output` files if needed. **Use `turns.txt` rather than `claude_run.jsonl` for any reading-by-eye task — the JSONL is large and noisy.**
+- [`error_map.py`](../../tools/verusage_plus/error_map.py) — per-function verifier-error attribution. Two modes:
+  - **Manifest-less** (default when `--manifest` is omitted): parse Verus output, walk every source file an error references, attribute each error to the enclosing function via brace-counted range parsing, and emit one row per error-bearing function. The summary on stderr — `total errors: N, distinct error-bearing functions: M, unattributed: U` — is the harness-side "stats from Verus" headline. `run_pilot.sh` invokes this mode automatically when `VERIFIER_CMD` is set.
+  - **With `--manifest`**: same machinery, but one row per manifest target lemma (closed lemmas get `n_errors == 0`); the unattributed rows are per-file. Used post-mortem to cross-reference per-lemma lifecycle categories against final verifier outcome (see Phase-3 round 5 in [`docs/verusage_plus/phase3_postmortem.md`](../../docs/verusage_plus/phase3_postmortem.md)).
 - [`cheat_scan.py`](../../tools/verusage_plus/cheat_scan.py) — scan a transcript for forbidden git/network/outside-repo tool calls. Exits 0 if clean, 1 if any flag. Run with `--repo <pilot_repo>`; pass `--vstd-extra-prefix <PATH>` (repeatable) to whitelist additional vstd paths. `run_pilot.sh` invokes this automatically; manual invocation pattern: `python3 tools/verusage_plus/cheat_scan.py <run>/logs/claude_run.jsonl --repo <fork> --vstd-extra-prefix <vstd-path>`. Built-in carve-outs:
   - vstd cache: `~/.cargo/registry/src/<index>/vstd-<version>/`
   - vstd git checkout: `~/.cargo/git/checkouts/verus-*/<rev>/source/vstd/`
@@ -100,7 +105,7 @@ Cost extraction: Claude `--output-format stream-json` emits a single terminal `r
 ```
 main                              # mirror of upstream HEAD (no edits)
 └─ verusage_plus[_<TAG>]          # stripped target bodies (one branch per target set)
-   └─ pilot/<proj>-<tag>-<UTC>    # per-attempt; AGENTS.md + VERUSAGE_PLUS_TARGETS.txt at root
+   └─ pilot/<proj>-<tag>-<UTC>    # per-attempt; AGENTS.md at root (no target list — the agent works from verifier output)
 ```
 
 For Anvil where AL and AC strip disjoint target sets, the fork has TWO strip branches off `main`: `verusage_plus_AL` and `verusage_plus_AC`. Each pilot only has its own targets stripped. For Vest and MA where there's one target set, the strip branch is just `verusage_plus`.
@@ -117,7 +122,9 @@ For each new project (`<CODE>`, lowercase upstream dir `<proj-dir>`, fork at `<f
 REPO=/ssd1/sichangheagent/microsoft--verus-proof-synthesis
 UTC=$(date -u +%Y%m%dT%H%M%SZ)
 
-# 1. Resolve targets fresh from the VeruSAGE-Bench mapping.
+# 1. Resolve targets fresh from the VeruSAGE-Bench mapping. The manifest is
+#    harness-side only (used by strip_proofs and post-run scoring); it is
+#    not committed into the pilot repo.
 python3 $REPO/tools/verusage_plus/build_manifest.py \
   --mapping  $REPO/benchmarks/VeruSAGE-Bench/source-projects/<proj-dir>/mapping_<code>.txt \
   --unverified-dir $REPO/benchmarks/VeruSAGE-Bench/source-projects/<proj-dir>/unverified \
@@ -133,43 +140,56 @@ python3 $REPO/tools/verusage_plus/strip_proofs.py \
 git -c user.name='VeruSAGE+ harness' -c user.email='verusage-plus@example.local' \
   commit -am "verusage_plus[_TAG]: strip <N> VeruSAGE-Bench <CODE> targets"
 
-# 3. Confirm the verifier now reports >= n_targets errors. Use the per-project
-#    verifier command (see "Per-project toolchain matrix"); the OUTPUT line is
-#    the truth, not the exit code.
-<verifier command> 2>&1 | grep -E '(verification results|aborting due to)'
+# 3. Capture the strip-parent baseline from the verifier itself — initial
+#    error count and the set of error-bearing functions both come from
+#    Verus output, not from the manifest. The OUTPUT line is the truth,
+#    not the exit code.
+mkdir -p $REPO/runs/verusage_plus/_baselines
+<verifier command> > $REPO/runs/verusage_plus/_baselines/<CODE>.out 2>&1 || true
+python3 $REPO/tools/verusage_plus/error_map.py \
+  --repo <fork> \
+  --verifier-output $REPO/runs/verusage_plus/_baselines/<CODE>.out \
+  --out $REPO/runs/verusage_plus/_baselines/<CODE>.tsv
+# stderr line of the form
+#   "total errors: N, distinct error-bearing functions: M, unattributed: U"
+# is the baseline stat. Sanity-check M >= number of stripped target functions.
 
-# 4. Cut the pilot branch and embed AGENTS.md + targets.
+# 4. Cut the pilot branch and embed AGENTS.md only.
 git checkout -b "pilot/<CODE>-allN-$UTC"
 python3 $REPO/tools/verusage_plus/build_pilot.py \
   --template $REPO/tools/verusage_plus/agent_prompt.md \
-  --manifest $REPO/tools/verusage_plus/<code>_targets.txt \
   --out-dir <fork> \
   --var repo_path=<fork> \
   --var "verify_command=<from matrix>" \
   --var verify_dir=<fork> \
   --var "verify_setup=<one sentence about prebuilt deps + env vars>" \
-  --var n_targets=<N> --var initial_errors=<N or higher> \
   --var "vstd_paths=<path to bundled vstd>"
-git add AGENTS.md VERUSAGE_PLUS_TARGETS.txt && \
+git add AGENTS.md && \
   git -c user.name='VeruSAGE+ harness' -c user.email='verusage-plus@example.local' \
-    commit -m "pilot/<CODE>-allN: AGENTS.md + targets at root"
+    commit -m "pilot/<CODE>-allN: AGENTS.md at root"
 
 # 5. Write a launch.sh by copying an existing one and adjusting the env vars.
+#    Set VERIFIER_CMD to the same per-project command so run_pilot.sh runs
+#    the final verifier + error_map.py automatically on exit.
 mkdir -p $REPO/runs/verusage_plus/<CODE>__allN__$UTC/logs
 cp $REPO/runs/verusage_plus/AL__all96__20260510T085834Z/launch.sh \
    $REPO/runs/verusage_plus/<CODE>__allN__$UTC/launch.sh
-$EDITOR $REPO/runs/verusage_plus/<CODE>__allN__$UTC/launch.sh   # change FORK_REPO, RUN_NAME, BUDGET_USD, VERUS_BIN, VSTD_PREFIX
+$EDITOR $REPO/runs/verusage_plus/<CODE>__allN__$UTC/launch.sh   # change FORK_REPO, RUN_NAME, BUDGET_USD, VERUS_BIN, VSTD_PREFIX, VERIFIER_CMD
 
-# 6. Launch (synchronous; turns.txt + cheat_scan.txt land at exit).
+# 6. Launch (synchronous; turns.txt + cheat_scan.txt + verifier_final.out +
+#    error_map.tsv + error_map.summary land at exit).
 bash $REPO/runs/verusage_plus/<CODE>__allN__$UTC/launch.sh
 
-# 7. After agent exits.
-<verifier command> 2>&1 | grep -E '(verification results|aborting due to)'
-cat $REPO/runs/verusage_plus/<CODE>__allN__$UTC/cheat_scan.txt   # already produced by the driver
+# 7. After agent exits, inspect the auto-produced artefacts.
+cat $REPO/runs/verusage_plus/<CODE>__allN__$UTC/error_map.summary   # total errors / distinct fns
+cat $REPO/runs/verusage_plus/<CODE>__allN__$UTC/cheat_scan.txt
 cd <fork> && git add -u && \
   git -c user.name='VeruSAGE+ harness' -c user.email='verusage-plus@example.local' \
     commit -m "pilot/<CODE>-allN: agent edits"
-# Then write REPORT.md by hand using an existing one as model.
+# Compute close-rate by diffing the baseline TSV (step 3) against the
+# pilot's error_map.tsv: lines present in baseline but absent (or with
+# n_errors == 0) in the final TSV are closed functions. Then write
+# REPORT.md by hand using an existing one as model.
 ```
 
 ## Validation policy
@@ -179,8 +199,8 @@ cd <fork> && git add -u && \
   - AC: `./build.sh vreplicaset_controller.rs --rlimit 50 --time --verify-module vreplicaset_controller`
   - AL: `./build.sh anvil.rs --crate-type lib --rlimit 50 --time`
   - MA: `VERUS_SINGULAR_PATH=$HOME/.nix-profile/bin/Singular ./verus-mimalloc/verify.sh` (after `./setup-libc-dependency.sh`)
-- **Honest-work signature**: `git diff <strip_branch> HEAD --stat` should be non-trivial across the target files (Phase-1 Vest cheat produced 0 lines; honest pilots produce hundreds-to-thousands).
-  Note: `git diff <strip_branch>..HEAD --shortstat -- ':!AGENTS.md' ':!VERUSAGE_PLUS_TARGETS.txt'` swallows output when the pathspec exclusions interact oddly with the diff range; use a plain `--stat` instead and ignore the AGENTS.md / VERUSAGE_PLUS_TARGETS.txt rows visually.
+- **Honest-work signature**: `git diff <strip_branch> HEAD --stat` should be non-trivial across the target files (Phase-1 Vest cheat produced 0 lines; honest pilots produce hundreds-to-thousands). The pilot tree contains only `AGENTS.md` on top of the strip parent, so ignore that one row visually.
+- **Verifier-derived close-rate**: compare the baseline TSV under `runs/verusage_plus/_baselines/<CODE>.tsv` (produced post-strip) against the pilot's `error_map.tsv` (produced automatically when `VERIFIER_CMD` is set). A function present in the baseline that no longer appears, or that has `n_errors == 0` in the final TSV, is closed; the rest are open. Both numbers come from Verus output, not from the agent's self-report or from a curated manifest, so they are robust against the AC-style "consciously closed vs verifier-passing" divergence seen in Phase 3.
 - **Cheat check**: `cheat_scan.py ... --vstd-extra-prefix <bundled-vstd-paths>`. Now invoked automatically by `run_pilot.sh`; its output lands in `<run>/cheat_scan.txt`. The agent's self-report per `agent_prompt.md` complements it but is not load-bearing.
 - **Cross-check** (cheap, independent of cheat_scan): grep `turns.txt` for `benchmarks/`, `verified/`, `unverified/`, `mapping_<code>` — if zero hits, the agent never opened the answer key.
 
